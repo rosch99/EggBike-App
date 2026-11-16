@@ -1,0 +1,47 @@
+name: APK bauen
+
+# Baut bei jedem Upload/Push automatisch eine installierbare Debug-APK
+# und hängt sie an eine Release-Seite namens "neueste-apk".
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Projekt holen
+        uses: actions/checkout@v4
+
+      - name: Java 17 einrichten
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Android-SDK einrichten
+        uses: android-actions/setup-android@v3
+
+      - name: Gradle-Wrapper erzeugen
+        run: gradle wrapper --gradle-version 8.7
+
+      - name: APK bauen
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: APK als Artefakt hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: EggRiderLogger-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: APK als Release veröffentlichen
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: neueste-apk
+          name: Neueste APK
+          files: app/build/outputs/apk/debug/app-debug.apk
+          body: Automatisch gebaute Debug-APK. Zum Installieren auf dem Handy herunterladen.
