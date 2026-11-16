@@ -28,22 +28,37 @@ jobs:
         with:
           packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
+      - name: Projektordner finden
+        id: find
+        run: |
+          SETTINGS=$(find . -name settings.gradle -not -path '*/build/*' | head -n1)
+          if [ -z "$SETTINGS" ]; then
+            echo "FEHLER: keine settings.gradle im Repo gefunden."
+            echo "Vorhandene Dateien:"; find . -maxdepth 2 -type f | sort
+            exit 1
+          fi
+          DIR=$(dirname "$SETTINGS")
+          echo "Gradle-Projekt gefunden in: $DIR"
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
       - name: Gradle-Wrapper erzeugen
+        working-directory: ${{ steps.find.outputs.dir }}
         run: gradle wrapper --gradle-version 8.7
 
       - name: APK bauen
+        working-directory: ${{ steps.find.outputs.dir }}
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
       - name: APK als Artefakt hochladen
         uses: actions/upload-artifact@v4
         with:
           name: EggRiderLogger-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ steps.find.outputs.dir }}/app/build/outputs/apk/debug/app-debug.apk
 
       - name: APK als Release veröffentlichen
         uses: softprops/action-gh-release@v2
         with:
           tag_name: neueste-apk
           name: Neueste APK
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: ${{ steps.find.outputs.dir }}/app/build/outputs/apk/debug/app-debug.apk
           body: Automatisch gebaute Debug-APK. Zum Installieren auf dem Handy herunterladen.
