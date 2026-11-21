@@ -41,13 +41,36 @@ jobs:
           echo "Gradle-Projekt gefunden in: $DIR"
           echo "dir=$DIR" >> "$GITHUB_OUTPUT"
 
+      - name: Signaturschlüssel einrichten
+        env:
+          KS: ${{ secrets.EGG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/eggbike-release.jks"
+            echo "EGG_KEYSTORE_FILE=$RUNNER_TEMP/eggbike-release.jks" >> "$GITHUB_ENV"
+            echo "Fester Signaturschlüssel aktiv."
+          else
+            echo "::warning::Secret EGG_KEYSTORE_BASE64 fehlt – die APK wird mit wechselndem Debug-Schlüssel signiert und lässt sich nicht über die vorige installieren."
+          fi
+
       - name: Gradle-Wrapper erzeugen
         working-directory: ${{ steps.find.outputs.dir }}
         run: gradle wrapper --gradle-version 8.7
 
       - name: APK bauen
         working-directory: ${{ steps.find.outputs.dir }}
+        env:
+          EGG_KEYSTORE_PASSWORD: ${{ secrets.EGG_KEYSTORE_PASSWORD }}
         run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Signatur prüfen
+        working-directory: ${{ steps.find.outputs.dir }}
+        env:
+          EGG_KEYSTORE_PASSWORD: ${{ secrets.EGG_KEYSTORE_PASSWORD }}
+        # Zeigt Konfiguration und SHA-256 des Schlüssels, mit dem die Debug-APK signiert wird.
+        # Nur Anzeige, bricht den Build nicht ab.
+        run: |
+          ./gradlew signingReport --no-daemon -q 2>&1 | grep -A7 -E "^Variant: debug$" || echo "::warning::Signatur konnte nicht angezeigt werden"
 
       - name: APK als Artefakt hochladen
         uses: actions/upload-artifact@v4
