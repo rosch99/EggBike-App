@@ -28,7 +28,6 @@ import androidx.webkit.WebViewAssetLoader
 import com.eggriderng.logger.databinding.ActivityMainBinding
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -139,7 +138,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 launch {
                     // Fahrt gestoppt → Liste neu laden (die Datei ist jetzt fertig)
-                    BleService.recording.distinctUntilChanged().drop(1).filter { !it }
+                    BleService.recording.drop(1).filter { !it }
                         .collect { if (pageReady) js("Native.tripsChanged()") }
                 }
                 launch {
