@@ -15,10 +15,28 @@ android {
         versionName "0.30"
     }
 
+    // Fester Signaturschlüssel: In GitHub Actions aus den Secrets EGG_KEYSTORE_BASE64 und
+    // EGG_KEYSTORE_PASSWORD (siehe build.yml). Damit lässt sich jede neue APK über die alte
+    // installieren. Ohne Schlüssel (z. B. lokal) wird wie bisher mit dem Debug-Schlüssel signiert.
+    def eggKeystore = System.getenv("EGG_KEYSTORE_FILE")
+    def eggPassword = System.getenv("EGG_KEYSTORE_PASSWORD")
+    def useFixedKey = eggKeystore && eggPassword && file(eggKeystore).exists()
+
+    signingConfigs {
+        if (useFixedKey) {
+            fixed {
+                storeFile file(eggKeystore)
+                storePassword eggPassword
+                keyAlias "eggbike"
+                keyPassword eggPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
-            // Debug-Build wird automatisch mit dem Debug-Schlüssel signiert und ist installierbar.
             applicationIdSuffix ""
+            if (useFixedKey) signingConfig signingConfigs.fixed
         }
     }
 
