@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
@@ -31,6 +32,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -48,16 +51,40 @@ class BleService : Service() {
     companion object {
         const val ACTION_START = "com.eggriderng.logger.START"
         const val ACTION_STOP = "com.eggriderng.logger.STOP"
+        const val ACTION_TRIP_START = "com.eggriderng.logger.TRIP_START"
+        const val ACTION_TRIP_STOP = "com.eggriderng.logger.TRIP_STOP"
         private const val CHANNEL = "eggrider"
         private const val NOTIF_ID = 1
 
         // Zustand, den die Oberfläche beobachtet
-        val status = MutableStateFlow("Getrennt")
+        /** Verbindungsstatus: kind = "" (getrennt), "busy", "on" oder "err" – wie die Statuspunkte der Web-Oberfläche. */
+        data class Status(val kind: String, val text: String, val sub: String = "")
+        val status = MutableStateFlow(Status("", "Nicht verbunden", "Display einschalten, dann „Verbinden“ tippen."))
         val live = MutableStateFlow<Protocol.Live?>(null)
+        /** Letzte gültige Live-Antwort (22 3A) als Rohbytes; die Oberfläche dekodiert selbst. */
+        val liveRaw = MutableStateFlow<ByteArray?>(null)
+        /** Display-Einstellungen (22 29) als Rohbytes. */
+        val settingsRaw = MutableStateFlow<ByteArray?>(null)
         val running = MutableStateFlow(false)
         val startedAt = MutableStateFlow(0L)
         val currentFile = MutableStateFlow<String?>(null)
+        // Fahrt-Aufzeichnung (getrennt vom Verbinden, wie in der Web-App)
+        val recording = MutableStateFlow(false)
+        val tripStart = MutableStateFlow(0L)
+        val tripDist = MutableStateFlow(0.0)
+        /** Protokollzeilen mit fortlaufender Nummer, damit die Oberfläche nichts doppelt anzeigt. */
+        data class LogLine(val seq: Long, val text: String)
+        val logs = MutableSharedFlow<LogLine>(replay = 300, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+        private var logSeq = 0L
+        @Volatile var verbose = false
         var assistType = 0
+
+        fun log(msg: String) {
+            val t = SimpleDateFormat("HH:mm:ss.SSS", Locale.US).format(Date())
+            synchronized(this) { logs.tryEmit(LogLine(++logSeq, "$t  $msg")) }
+        }
+
+        private fun hex(a: ByteArray) = a.joinToString(" ") { String.format("%02X", it.toInt() and 0xFF) }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -87,9 +114,10 @@ class BleService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopSession()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACTION_STOP -> { stopSession(); return START_NOT_STICKY }
+            ACTION_TRIP_START -> { if (job != null) startTrip(); return START_STICKY }
+            ACTION_TRIP_STOP -> { stopTrip(); return START_STICKY }
         }
         startForegroundNotif("Starte …")
         if (job == null) startSession()
@@ -104,41 +132,76 @@ class BleService : Service() {
         acquireWake()
         job = scope.launch {
             val adapter = (getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
-            if (adapter == null || !adapter.isEnabled) { status.value = "Bluetooth aus"; stopSelf(); return@launch }
-            openCsv()
+            if (adapter == null || !adapter.isEnabled) {
+                setStatus("err", "Bluetooth aus", "Bitte Bluetooth einschalten und erneut verbinden.")
+                log("Bluetooth ist ausgeschaltet.")
+                running.value = false; stopSelf(); return@launch
+            }
             var tries = 0
             while (isActive && running.value) {
-                status.value = if (tries == 0) "Suche Display …" else "Neuverbindung …"
+                setStatus("busy", if (tries == 0) "Suche Display …" else "Neuverbindung …", "Display einschalten und in Reichweite halten.")
+                log(if (tries == 0) "Suche Display …" else "Neuverbindung (Versuch ${tries + 1}) …")
                 val dev = findDevice(adapter)
-                if (dev == null) { status.value = "Kein Display gefunden"; delay(3000); tries++; continue }
-                status.value = "Verbinde …"
-                if (!connectAndSetup(dev)) { status.value = "Verbindung fehlgeschlagen"; closeGatt(); delay(2500); tries++; continue }
-                status.value = "Verbunden"
+                if (dev == null) {
+                    setStatus("err", "Kein Display gefunden", "Display eingeschaltet? Original-App ganz geschlossen?")
+                    log("Kein Display gefunden.")
+                    delay(3000); tries++; continue
+                }
+                setStatus("busy", "Verbinde …", dev.name ?: dev.address)
+                log("Verbinde mit \"" + (dev.name ?: "(ohne Namen)") + "\" " + dev.address + " …")
+                if (!connectAndSetup(dev)) {
+                    setStatus("err", "Verbindung fehlgeschlagen", "Neuer Versuch läuft automatisch …")
+                    log("Verbindung fehlgeschlagen.")
+                    closeGatt(); delay(2500); tries++; continue
+                }
+                setStatus("on", "Verbunden", dev.name ?: dev.address)
+                log("Verbunden, Benachrichtigungen aktiv.")
                 tries = 0
                 runComms()                      // läuft bis zum Verbindungsabbruch
                 closeGatt()
-                if (running.value) { status.value = "Verbindung verloren"; delay(1500) }
+                if (running.value) {
+                    setStatus("err", "Verbindung verloren", "Neuverbindung läuft automatisch …")
+                    log("Verbindung getrennt.")
+                    delay(1500)
+                }
             }
         }
     }
 
+    private fun setStatus(kind: String, text: String, sub: String = "") {
+        status.value = Status(kind, text, sub)
+        if (running.value) try {
+            getSystemService(NotificationManager::class.java).notify(NOTIF_ID, buildNotif(text))
+        } catch (_: Exception) {}
+    }
+
     private fun stopSession() {
+        stopTrip()
         running.value = false
         job?.cancel(); job = null
         closeGatt()
         stopGps(); releaseWake()
-        live.value = null
-        status.value = "Getrennt"
+        live.value = null; liveRaw.value = null
+        status.value = Status("err", "Getrennt", "Zum erneuten Verbinden tippen.")
+        log("Verbindung beendet.")
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     private suspend fun runComms() {
-        request(Protocol.appIdentity(), 4, 1500)
-        request(Protocol.readIdentity(), Protocol.LEN_IDENTITY, 1500)
-        request(Protocol.readSettings(), Protocol.LEN_SETTINGS, 2000)?.let {
-            if (Protocol.crcOk(it)) assistType = Protocol.parseSettings(it).assistType
+        val ack = request(Protocol.appIdentity(), 4, 1500)
+        log(if (ack != null && Protocol.crcOk(ack)) "Anmeldung akzeptiert (Modus 1)." else "Anmeldung ohne Bestätigung – lese trotzdem weiter.")
+        request(Protocol.readIdentity(), Protocol.LEN_IDENTITY, 1500)?.takeIf { Protocol.crcOk(it) }?.let {
+            val d = it.copyOfRange(2, it.size - 2)
+            val mac = (0 until 6).joinToString(":") { i -> String.format("%02X", d[i].toInt() and 0xFF) }
+            log("Identität: MAC " + mac + ", Firmware " + (d[7].toInt() and 0xFF) + "." + (d[6].toInt() and 0xFF) + ", Release " + (d[8].toInt() and 0xFF))
         }
+        val st = request(Protocol.readSettings(), Protocol.LEN_SETTINGS, 2000)
+        if (st != null && st.size == Protocol.LEN_SETTINGS && Protocol.crcOk(st)) {
+            assistType = Protocol.parseSettings(st).assistType
+            settingsRaw.value = st
+            log("Display-Einstellungen gelesen (Assist-Typ " + (if (assistType == 0) 9 else assistType) + " Stufen).")
+        } else log("Einstellungen (22 29): keine gültige Antwort.")
         startedAt.value = System.currentTimeMillis()
         var lastSample = 0L
         var notifT = 0L
@@ -147,6 +210,7 @@ class BleService : Service() {
             if (rx != null && rx.size == Protocol.LEN_LIVE && Protocol.crcOk(rx)) {
                 val l = Protocol.parseLive(rx)
                 live.value = l
+                liveRaw.value = rx
                 val now = System.currentTimeMillis()
                 if (now - lastSample >= 1000) { lastSample = now; writeRow(now, l) }
                 if (now - notifT >= 2000) { notifT = now; updateNotif(l) }
@@ -260,6 +324,10 @@ class BleService : Service() {
         val rx = withTimeoutOrNull(timeout) { def.await() }
         pending = null
         if (rx != null && !Protocol.crcOk(rx)) wrongCRCs++
+        if (verbose || rx == null || !Protocol.crcOk(rx)) {
+            log("TX " + hex(cmd))
+            log("RX " + (if (rx == null) "(keine Antwort)" else hex(rx) + "  [" + rx.size + "/" + len + " Byte, CRC " + (if (Protocol.crcOk(rx)) "ok" else "FALSCH") + "]"))
+        }
         rx
     }
 
@@ -292,6 +360,36 @@ class BleService : Service() {
         return n
     }
 
+    private val csvLock = Any()
+    private var rows = 0
+
+    private fun startTrip() {
+        synchronized(csvLock) { startTripLocked() }
+    }
+
+    private fun startTripLocked() {
+        if (csv != null) return
+        openCsv()
+        rows = 0
+        tripStart.value = System.currentTimeMillis()
+        tripDist.value = 0.0
+        recording.value = true
+        log("Fahrt-Aufzeichnung gestartet (" + csv?.name + ").")
+    }
+
+    private fun stopTrip() {
+        synchronized(csvLock) { stopTripLocked() }
+    }
+
+    private fun stopTripLocked() {
+        val f = csv ?: return
+        csv = null
+        currentFile.value = null
+        if (rows < 2) { try { f.delete() } catch (_: Exception) {}; log("Fahrt verworfen (zu wenig Daten).") }
+        else log("Fahrt gespeichert (" + rows + " Punkte, " + String.format(Locale.US, "%.1f", distance) + " km).")
+        recording.value = false
+    }
+
     private fun openCsv() {
         ema.clear()
         val dir = File(getExternalFilesDir(null), "trips").apply { mkdirs() }
@@ -311,6 +409,10 @@ class BleService : Service() {
     private var lastRowT = 0L
 
     private fun writeRow(now: Long, l: Protocol.Live) {
+        synchronized(csvLock) { writeRowLocked(now, l) }
+    }
+
+    private fun writeRowLocked(now: Long, l: Protocol.Live) {
         val f = csv ?: return
         val spd = smooth("spd", l.speed); val v = smooth("v", l.voltage); val i = smooth("i", l.current)
         val cad = smooth("cad", l.cadence.toDouble()); val tq = smooth("tq", l.torque.toDouble())
@@ -335,7 +437,8 @@ class BleService : Service() {
             .append(l.tDisplayRaw).append(';').append(l.tMotorRaw).append(';').append(l.tBatteryRaw).append(';').append(l.tControllerRaw).append(';')
             .append(Math.round(v * i)).append(';').append(Math.round(cad)).append(';').append(Math.round(tq)).append(';').append(l.heartRaw)
             .append('\n')
-        try { f.appendText(row.toString()) } catch (_: Exception) {}
+        try { f.appendText(row.toString()); rows++ } catch (_: Exception) {}
+        tripDist.value = distance
     }
 
     private fun fmt(v: Double) = String.format(Locale.US, "%.2f", v)
@@ -387,8 +490,14 @@ class BleService : Service() {
 
     private fun buildNotif(text: String): Notification {
         ensureChannel()
+        val open = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
         return NotificationCompat.Builder(this, CHANNEL)
-            .setContentTitle("EggRider Logger")
+            .setContentTitle(if (recording.value) "EggRider · Fahrt läuft" else "EggRider Logger")
+            .setContentIntent(open)
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_stat_bike)
             .setOngoing(true)
@@ -411,6 +520,7 @@ class BleService : Service() {
     }
 
     override fun onDestroy() {
+        stopTrip()
         running.value = false
         scope.coroutineContext[Job]?.cancel()
         closeGatt(); stopGps(); releaseWake()
