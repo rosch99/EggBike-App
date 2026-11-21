@@ -1,0 +1,1042 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1116">
+<title>Bike-Display Testseite</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #171c24; --line: #262d38; --text: #e8ecf1; --muted: #8a94a3;
+    --accent: #3ddc97; --warn: #ffb454; --bad: #ff6b6b; --accent2: #4aa8ff; --accent3: #b06bff;
+  }
+  :root[data-theme="light"] {
+    --bg: #eef1f5; --panel: #ffffff; --line: #d7dde4; --text: #0f141b; --muted: #576170;
+    --accent: #0e9a56; --warn: #b96c00; --bad: #d1352f; --accent2: #1f6fd0; --accent3: #8a3ffc;
+  }
+  /* Offroad-Modus: rötlicher Akzent (wie am Display) */
+  :root[data-mode="offroad"] {
+    --bg: #160e10; --panel: #24171a; --line: #3a242a; --accent: #ff5a52;
+  }
+  :root[data-theme="light"][data-mode="offroad"] {
+    --bg: #f8eced; --panel: #ffffff; --line: #ecd4d6; --accent: #d1352f;
+  }
+  html, body { transition: background-color .4s ease; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 16px 16px 48px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  h1 { font-size: 18px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+  .ver { color: var(--muted); font-size: 12px; }
+  .htools { display: flex; align-items: center; gap: 10px; }
+  .ctl { display: flex; gap: 8px; margin-bottom: 12px; }
+  .ctl button { flex: 1; }
+  [hidden] { display: none !important; }
+  .topbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .topbar .spacer, .tripactions .spacer { flex: 1; }
+  .mini { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 6px 11px; font-size: 13px; font-weight: 500;
+    background: var(--panel); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; }
+  .mini .mlbl:empty { display: none; }
+  .recdot { width: 11px; height: 11px; border-radius: 50%; background: var(--muted); flex: none; }
+  .recdot.rec { background: var(--bad); animation: blink 1.2s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .recdot.rec { animation: none; } }
+  .tripbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 10px 14px; }
+  .tripbar button { flex: none; }
+  #btnTrip.rec { background: var(--bad); color: #fff; border-color: var(--bad); }
+  .tripstat { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 15px; }
+  .tripactions { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; }
+  .tripactions button { padding: 7px 12px; min-height: 38px; font-size: 14px; white-space: nowrap; }
+  .chk { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }
+  input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--accent); flex: none; margin: 0; }
+  .trip { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding: 10px 0; cursor: pointer; }
+  .trip > div { flex: 1; min-width: 0; }
+  .trip .th { display: flex; justify-content: space-between; font-weight: 650; }
+  .trip .ts { color: var(--muted); font-size: 13px; margin-top: 3px; }
+  .iconbtn { min-height: 40px; padding: 8px 12px; font-size: 18px; background: transparent; border: 1px solid var(--line); color: var(--text); }
+  .status { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.on { background: #30a46c; box-shadow: 0 0 0 4px rgba(48,164,108,.18); }   /* fest grün, auch im Offroad-Theme */
+  .dot.busy { background: var(--warn); }
+  .dot.err { background: var(--bad); }
+  #statusText { flex: 1; min-width: 0; font-size: 14px; }
+  #voltCell { margin-left: 5px; font-size: 11px; }
+  #statusText small { display: block; color: var(--muted); overflow-wrap: anywhere; }
+  button { font: inherit; color: var(--bg); background: var(--accent); border: 0; border-radius: 12px;
+    padding: 12px 16px; font-weight: 650; min-height: 46px; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); font-weight: 500; }
+  button:disabled { opacity: .45; }
+  .hero { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px 16px 14px;
+    text-align: center; margin-bottom: 12px; }
+  .hero .num { font-size: 84px; line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -2px; }
+  .hero .unit { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .bar { height: 28px; background: var(--line); border-radius: 9px; overflow: hidden; margin-top: 0; }
+  .bar > i { display: block; height: 100%; width: 0; transition: width .3s;
+    background-image: linear-gradient(90deg, #e5484d 0%, #f5a524 50%, #30a46c 100%); background-repeat: no-repeat; background-size: 100% 100%; }
+  .barlbl { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-top: 6px; }
+  /* Gauges */
+  .gauge { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    padding: 12px 10px 10px; text-align: center; }
+  .gauge svg { width: 100%; height: auto; display: block; }
+  .g-track { fill: none; stroke: var(--line); stroke-width: 15; stroke-linecap: round; }
+  .g-val { fill: none; stroke: var(--accent); stroke-width: 15; stroke-linecap: round;
+    transition: stroke-dasharray .35s ease, stroke .35s ease; }
+  .g-center { position: absolute; left: 0; right: 0; top: 54%; transform: translateY(-50%); }
+  .g-num { font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -1px; }
+  .g-unit { color: var(--muted); font-size: 12px; margin-top: 3px; }
+  .g-label { color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .3px; margin-top: 2px; }
+  .gauge.hero-g { margin-bottom: 12px; padding-bottom: 6px; }
+  .gauge.hero-g .g-num { font-size: 70px; }
+  .gauge.hero-g .g-unit { font-size: 16px; }
+  .gauge.hero-g .g-label { font-size: 15px; }
+  .g-track2 { fill: none; stroke: var(--line); stroke-width: 15; stroke-linecap: round; }
+  .g-cad-arc { fill: none; stroke: var(--accent3); stroke-width: 15; stroke-linecap: round; transition: stroke-dasharray .35s ease; }
+  .g-cad { color: var(--accent3); font-size: 25px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 7px; }
+  .foot { text-align: center; color: var(--muted); font-size: 12px; margin-top: 22px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 14px 14px 16px; margin-bottom: 12px; }
+  .panel > .ph { color: var(--muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 10px; }
+  /* Leistungs-Balken: Verhältnis Motor zu Fahrer (Segmente = Anteil an der Gesamtleistung, Summe 100 %) */
+  .ph2 { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+  .ph2 > span:first-child { color: var(--muted); font-size: clamp(19px, 5.8vw, 24px); font-weight: 500; }
+  .ph2 > span:last-child { font-size: clamp(19px, 5.8vw, 24px); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pbar { display: flex; height: 28px; border-radius: 9px; overflow: hidden; background: var(--line); }
+  .pbar > i { display: block; height: 100%; width: 0; transition: width .35s ease; }
+  .pleg { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; column-gap: 14px; margin-top: 10px; font-size: clamp(19px, 5.8vw, 24px); color: var(--muted); font-variant-numeric: tabular-nums; }
+  .pleg b { font-size: inherit; }
+  .pleg.small { font-size: clamp(15px, 4.4vw, 18px); }
+  .pleg.small { flex-wrap: nowrap; white-space: nowrap; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 13px 15px; min-width: 0; }
+  .tile .k { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile .v { font-size: 34px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .tile .v small { font-size: 15px; color: var(--muted); font-weight: 400; margin-left: 3px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; font-size: 13px; color: var(--muted); }
+  .chip.on { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+  .chip.bad { color: #fff; background: var(--bad); border-color: var(--bad); }
+  h2 { font-size: 14px; color: var(--muted); font-weight: 600; margin: 18px 0 8px; text-transform: uppercase; letter-spacing: .6px; }
+  .row { display: flex; gap: 8px; margin-bottom: 8px; }
+  .row button { flex: 1; }
+  pre { background: #0a0d11; border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin: 0;
+    font: 11.5px/1.45 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: #b8c2cf;
+    height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+  details { margin-top: 8px; }
+  summary { color: var(--muted); font-size: 13px; cursor: pointer; padding: 8px 0; list-style: none; }
+  summary::before { content: "▸ "; }
+  details[open] summary::before { content: "▾ "; }
+  details[open] summary { margin-bottom: 8px; }
+  select { font: inherit; font-size: 12px; color: var(--text); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 3px 8px; }
+  .setpanel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 4px 14px 10px; margin-bottom: 12px; }
+  .setpanel > summary { color: var(--text); font-weight: 650; font-size: 15px; padding: 12px 0; }
+  .setrow { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+  .setrow:first-child { border-top: 0; }
+  .setrow > span:first-child { color: var(--muted); }
+  .setrow > span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .setsub { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .5px; margin-top: 10px; padding-top: 6px; }
+  .note { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  .alert { background: #2a1a1a; border: 1px solid #5a2a2a; color: #ffc9c9; border-radius: 12px; padding: 12px 14px;
+    margin-bottom: 12px; font-size: 14px; display: none; }
+</style>
+</head>
+<body>
+<main>
+  <div class="alert" id="alert"></div>
+
+  <div class="topbar">
+    <button class="mini" id="tgConn" aria-label="Verbindung ein-/ausklappen"><span class="dot" id="dot"></span><span class="mlbl" id="connMini">Verbinden</span></button>
+    <button class="mini" id="tgTrip" aria-label="Fahrtaufzeichnung ein-/ausklappen"><span class="recdot" id="tripIcon"></span><span class="mlbl" id="tripMini">Fahrt</span></button>
+    <span class="spacer"></span>
+    <button class="mini" id="btnTheme" aria-label="Hell/Dunkel umschalten">☀️</button>
+  </div>
+
+  <div class="status" id="connPanel">
+    <div id="statusText">Nicht verbunden<small id="statusSub">Display einschalten, dann „Verbinden“ tippen.</small></div>
+    <button id="btnConnect">Verbinden</button>
+  </div>
+
+  <div class="tripbar" id="tripbar" hidden>
+    <button class="ghost" id="btnTrip" disabled>● Fahrt aufzeichnen</button>
+    <div class="tripstat" id="tripStat">erst verbinden</div>
+  </div>
+
+  <section class="panel">
+    <div class="ph2"><span>Akku (Display)</span><span id="battTxt">– %</span></div>
+    <div class="bar"><i id="battBar"></i></div>
+    <div class="pleg small">
+      <span>Schätzung <b id="battEst" style="color:var(--accent2)">–</b></span>
+      <span id="battDetail"></span>
+    </div>
+  </section>
+
+  <section class="gauge hero-g">
+    <svg viewBox="0 0 200 158" aria-hidden="true">
+      <path class="g-track" d="M25.5 143 A 86 86 0 1 1 174.5 143" pathLength="100"/>
+      <path class="g-val" id="gSpeed" d="M25.5 143 A 86 86 0 1 1 174.5 143" pathLength="100" stroke-dasharray="0 100"/>
+      <path class="g-track2" d="M41.1 134 A 68 68 0 1 1 158.9 134" pathLength="100"/>
+      <path class="g-cad-arc" id="gCad" d="M41.1 134 A 68 68 0 1 1 158.9 134" pathLength="100" stroke-dasharray="0 100"/>
+    </svg>
+    <div class="g-center">
+      <div class="g-num" id="speed">–</div>
+      <div class="g-unit">km/h</div>
+      <div class="g-cad"><span id="cadGauge">–</span> rpm</div>
+    </div>
+    <div class="g-label">Tempo · Trittfrequenz</div>
+  </section>
+
+  <section class="panel">
+    <div class="ph2"><span>Gesamtleistung</span><span id="wattTot">– W</span></div>
+    <div class="pbar">
+      <i id="pbMotor" style="background:var(--warn)"></i>
+      <i id="pbRider" style="background:var(--accent2)"></i>
+    </div>
+    <div class="pleg">
+      <span><b id="watt" style="color:var(--warn)">–</b> W Motor</span>
+      <span><b id="riderW" style="color:var(--accent2)">–</b> W Fahrer</span>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="tile"><div class="k">Spannung<span id="voltCell"></span></div><div class="v"><span id="volt">–</span><small>V</small></div></div>
+    <div class="tile"><div class="k">Unterstützung</div><div class="v"><span id="assist">–</span><small id="mode"></small></div></div>
+  </section>
+
+  <div class="chips">
+    <span class="chip" id="cLight">Licht</span>
+    <span class="chip" id="cLock">Sperre</span>
+    <span class="chip" id="cErr">Fehler: –</span>
+  </div>
+
+  <details class="setpanel" id="tripsPanel">
+    <summary>Gespeicherte Fahrten</summary>
+    <div class="tripactions">
+      <label class="chk"><input type="checkbox" id="tripAll"> alle</label>
+      <span class="spacer"></span>
+      <button id="btnTripShare" disabled>Senden als …</button>
+      <button class="ghost" id="btnTripDel" disabled>Löschen</button>
+    </div>
+    <div id="tripsBody"><div class="setrow"><span>noch keine Fahrten</span><span></span></div></div>
+  </details>
+
+  <details class="setpanel" id="setPanel" open>
+    <summary>Display-Einstellungen</summary>
+    <div class="setrow"><span>Akkutyp (für SOC-Schätzung)</span><select id="battType" aria-label="Akkutyp">
+        <option value="10">36 V (10S)</option>
+        <option value="13" selected>48 V (13S)</option>
+        <option value="14">52 V (14S)</option>
+        <option value="16">60 V (16S)</option>
+      </select></div>
+    <div id="setBody"><div class="setrow"><span>wird nach dem Verbinden gelesen …</span><span></span></div></div>
+  </details>
+
+  <details id="logBox" open>
+    <summary>Protokoll (für Rückmeldung an die Entwicklung)</summary>
+    <div class="row">
+      <button class="ghost" id="btnRec">Aufzeichnen</button>
+      <button class="ghost" id="btnClear">Leeren</button>
+      <button class="ghost" id="btnCopy">Kopieren</button>
+    </div>
+    <pre id="log"></pre>
+  </details>
+  <p class="note" id="bgNote">Diese Seite liest nur Werte aus dem Display. Sie ändert keine Einstellungen an Display oder Motor.
+  Bildschirm bitte eingeschaltet lassen – im Hintergrund trennt der Browser die Verbindung.</p>
+  <div class="foot" id="footVer">Bike-Display · v0.30</div>
+</main>
+
+<script>
+"use strict";
+// ---- Protocol constants (derived from static analysis, unverified on hardware) ----
+const SVC = "e7be0001-daae-bbb7-e711-a8dbea57019a";
+const CH_WRITE = "e7be0e02-daae-bbb7-e711-a8dbea57019a";
+const CH_NOTIFY = "e7be0e03-daae-bbb7-e711-a8dbea57019a";
+const CHUNK = 20;
+const REQ = {
+  identity: { name: "DisplayIdentity", cmd: [0x22, 0x12], len: 14, timeout: 1500 },
+  liveV04:  { name: "VehStatusV04",    cmd: [0x22, 0x3A], len: 24, timeout: 1000 },
+  liveV01:  { name: "VehStatusV01",    cmd: [0x22, 0x01], len: 16, timeout: 1000 },
+  settings: { name: "DisplaySettings", cmd: [0x22, 0x29], len: 34, timeout: 2000 },
+};
+const POLL_MS = 400;
+// App-Anmeldung (2E 18): [App-Version minor, patch, AppCode 4 Byte LE, Modus, Zufall 2 Byte].
+// Modus entspricht der Original-App: 1 = aktiviert, 2 = Händler, 0 = Testbetrieb.
+const APP_VERSION = [9, 27];          // 2.9.27
+const APP_CODE = [0x44, 0x33, 0x22, 0x11];
+const APP_MODE_CANDIDATES = [1, 2, 0]; // Modus 1 am C1 bestätigt; 2 und 0 nur als Rückfall
+function buildAppIdentity(mode) {
+  const payload = [...APP_VERSION, ...APP_CODE, mode, 0x00, 0x00];
+  return { name: "AppIdentity(mode=" + mode + ")", cmd: [0x2E, 0x18, ...payload], len: 4, timeout: 1500 };
+}
+// Schreibkommando Licht an/aus (2E 24 <flag>), Bestätigung 4 Byte.
+function buildLight(on) {
+  return { name: "Licht " + (on ? "AN" : "AUS"), cmd: [0x2E, 0x24, on ? 1 : 0], len: 4, timeout: 1000, write: true };
+}
+
+// Bafang-Fehlercodes (M620/G510 = Bafang UART). Codes 1 und 3 sind laut App keine Störung.
+const BAFANG_ERRORS = {
+  1: "Normal", 3: "Bremse betätigt", 4: "Gasgriff nicht in Ausgangslage", 5: "Gasgriff-Fehler",
+  6: "Unterspannungsschutz", 7: "Überspannungsschutz", 8: "Hall-Sensor-Fehler (Motor)",
+  9: "Phasenleitung-Fehler (Motor)", 16: "Controller zu heiß", 17: "Temperatursensor Controller defekt",
+  18: "Stromsensor-Fehler", 19: "Temperatursensor Akku defekt", 20: "Temperatursensor Motor defekt",
+  33: "Geschwindigkeitssensor-Fehler", 34: "BMS-Kommunikationsfehler", 35: "Licht-Fehler",
+  36: "Lichtsensor-Fehler", 37: "Drehmomentsensor (Drehmoment)", 38: "Drehmomentsensor (Drehzahl)",
+  48: "Kommunikationsfehler",
+};
+const ERR_BENIGN = new Set([0, 1, 3]);   // kein Fehlerzustand
+const errorName = (c) => BAFANG_ERRORS[c] || ("Code " + c);
+
+// ---- Helpers ----
+const $ = (id) => document.getElementById(id);
+const hex = (a) => Array.from(a, (b) => b.toString(16).padStart(2, "0").toUpperCase()).join(" ");
+function crc16(bytes, omitAtEnd = 0) {            // CRC-16/CCITT-FALSE
+  let c = 0xFFFF;
+  for (let i = 0; i < bytes.length - omitAtEnd; i++) {
+    c ^= bytes[i] << 8;
+    for (let j = 0; j < 8; j++) c = (c & 0x8000) ? ((c << 1) ^ 0x1021) & 0xFFFF : (c << 1) & 0xFFFF;
+  }
+  return c;
+}
+function withCrc(cmd) { const c = crc16(cmd); return Uint8Array.from([...cmd, c >> 8, c & 0xFF]); }
+function crcOk(rx) {
+  if (rx.length < 4) return false;
+  const c = crc16(rx, 2);
+  return rx[rx.length - 2] === (c >> 8) && rx[rx.length - 1] === (c & 0xFF);
+}
+const u16le = (d, o) => d[o] | (d[o + 1] << 8);
+
+const logLines = [];
+function log(msg) {
+  const t = new Date().toLocaleTimeString("de-AT", { hour12: false }) + "." + String(Date.now() % 1000).padStart(3, "0");
+  logLines.push(t + "  " + msg);
+  if (logLines.length > 400) logLines.shift();
+  const el = $("log");
+  el.textContent = logLines.join("\n");
+  el.scrollTop = el.scrollHeight;
+}
+function setConnOpen(open) { $("connPanel").hidden = !open; }
+function setTripOpen(open) { $("tripbar").hidden = !open; }
+function setStatus(kind, text, sub) {
+  $("dot").className = "dot" + (kind ? " " + kind : "");
+  $("statusText").firstChild.nodeValue = text;
+  $("statusSub").textContent = sub || "";
+  $("connMini").textContent = (kind === "on") ? "" : text;   // verbunden: nur das Symbol
+  setConnOpen(kind !== "on");                                // verbunden → einklappen; sonst (Fehler/getrennt) aufklappen
+}
+function showAlert(html) { const a = $("alert"); a.innerHTML = html; a.style.display = "block"; }
+
+// ---- BLE session ----
+let device = null, chWrite = null, chNotify = null, running = false, wakeLock = null;
+let curMode = null;        // "road" | "offroad" für das Theme
+// Unterstützungsstufe: Das Protokoll liefert immer den Rohwert 0–9. Je nach Display-Einstellung
+// (Assist-Typ aus 22 29: 0 = 9 Stufen, 3 = 3 Stufen, 5 = 5 Stufen) rechnet die Original-App so um:
+const ASSIST_MAPS = { 3: { 0: 0, 1: 1, 5: 2, 9: 3 }, 5: { 0: 0, 1: 1, 3: 2, 5: 3, 7: 4, 9: 5 } };
+let assistType = 0;        // wird beim Lesen der Display-Einstellungen gesetzt
+function displayAssist(raw) { const m = ASSIST_MAPS[assistType]; return (m && raw in m) ? m[raw] : raw; }
+let lastLight = 0;         // zuletzt gelesener Lichtzustand (für den Umschalter)
+let lastLightState = null; // für die Theme-Kopplung (nur bei Änderung umschalten)
+const pendingCommands = []; // Schreibkommandos, die die Schleife zwischen den Abfragen sendet
+let rxBuf = [];
+let rxWaiter = null;
+
+function onNotify(ev) {
+  const v = new Uint8Array(ev.target.value.buffer, ev.target.value.byteOffset, ev.target.value.byteLength);
+  for (const b of v) rxBuf.push(b);
+  if (rxWaiter) rxWaiter();
+}
+function waitBytes(n, timeoutMs) {
+  return new Promise((resolve) => {
+    const deadline = setTimeout(() => { rxWaiter = null; resolve(Uint8Array.from(rxBuf.splice(0))); }, timeoutMs);
+    const check = () => {
+      if (rxBuf.length >= n) { clearTimeout(deadline); rxWaiter = null; resolve(Uint8Array.from(rxBuf.splice(0, n))); }
+    };
+    rxWaiter = check; check();
+  });
+}
+async function request(req, quiet) {
+  if (rxBuf.length) { log("Rest im Puffer verworfen: " + hex(rxBuf)); rxBuf = []; }
+  const tx = withCrc(req.cmd);
+  for (let i = 0; i < tx.length; i += CHUNK) {
+    const part = tx.slice(i, i + CHUNK);
+    if (chWrite.writeValueWithoutResponse) await chWrite.writeValueWithoutResponse(part);
+    else await chWrite.writeValue(part);
+  }
+  const rx = await waitBytes(req.len, req.timeout);
+  const ok = rx.length === req.len && crcOk(rx);
+  if (rx.length && !crcOk(rx)) wrongCRCs++;   // Zähler für CSV (wie Original-App)
+  if (!quiet || !ok) {
+    log("TX " + req.name + ": " + hex(tx));
+    log("RX " + (rx.length ? hex(rx) : "(keine Antwort)") +
+        (rx.length ? "  [" + rx.length + "/" + req.len + " Byte, CRC " + (crcOk(rx) ? "ok" : "FALSCH") + "]" : ""));
+  }
+  return ok ? rx : null;
+}
+
+// ---- Decoders (payload starts after the 2-byte header) ----
+function decodeIdentity(rx) {
+  const d = rx.slice(2, rx.length - 2);
+  return { mac: hex(d.slice(0, 6)).replace(/ /g, ":"), fw: d[7] + "." + d[6], release: d[8] };
+}
+const temp = (b) => (b === 0xFF ? null : b - 50);   // 0xFF = kein Sensor
+function decodeV04(rx) {
+  const d = rx.slice(2, rx.length - 2);
+  return {
+    format: "V04",
+    voltage: u16le(d, 0) * 0.01, speed: u16le(d, 2) * 0.01, current: u16le(d, 4) * 0.1,
+    battery: d[6], cadence: d[7], humanTorque: d[8],
+    heartRate: d[9] === 0xFF ? null : d[9],
+    tDisplay: temp(d[10]), tMotor: temp(d[11]), tController: temp(d[12]), tBattery: temp(d[13]),
+    // Rohwerte für den CSV-Export (wie Original-App: 0xFF → 205, kein Sentinel)
+    tDisplayRaw: d[10] - 50, tMotorRaw: d[11] - 50, tControllerRaw: d[12] - 50, tBatteryRaw: d[13] - 50, heartRateRaw: d[9],
+    error: d[14],
+    light: (d[15] >> 7) & 1, tail: (d[15] >> 6) & 1, cruise: (d[15] >> 5) & 1, lock: (d[15] >> 4) & 1,
+    assist: (d[16] >> 4) & 0x0F, mode: d[16] & 0x0F,
+  };
+}
+function decodeV01(rx) {
+  const d = rx.slice(2, rx.length - 2);
+  return {
+    format: "V01",
+    voltage: u16le(d, 0) * 0.01, speed: u16le(d, 2) * 0.01, current: u16le(d, 4) * 0.01,
+    tDisplay: (d[6] << 24) >> 24, tMotor: d[7],
+    assist: (d[8] >> 4) & 0x0F, mode: d[8] & 0x0F,
+    error: d[9], battery: d[10],
+    light: (d[11] >> 7) & 1, lock: (d[11] >> 6) & 1, cruise: null, cadence: null,
+  };
+}
+const fmt = (v, digits) => (v === null || v === undefined || Number.isNaN(v)) ? "–" : v.toFixed(digits);
+
+// ---- Display-Einstellungen (22 29) ----
+const SET_LUT = {
+  units: { 0: "metrisch (km)", 1: "imperial (mi)" },
+  secondary: { 0: "Strom (A)", 1: "Leistung (W)", 2: "Effizienz (Wh/km)", 3: "Reichweite (km)", 4: "Akku (%)", 5: "Trip (km)", 7: "Rider (W)" },
+  assist: { 0: "9 Stufen", 3: "3 Stufen", 5: "5 Stufen" },
+  shutdown: { 0: "nie", 1: "nach 5 Min", 2: "nach 2 Std", 3: "nach 10 Std" },
+  modeLabels: { 0: "Road / Offroad", 1: "Eco / Sport" },
+  roadRestrict: { 0: "nein", 1: "ja (Änderung per App)", 2: "ja (Änderung per Display)" },
+  layout: { 0: "Layout 1", 1: "Layout 2", 2: "Layout 3" },
+  proto: { 1: "Bafang UART", 4: "Bafang Rx/Tx getauscht", 17: "CAN Bafang" },
+};
+const lut = (m, v) => (v in m) ? m[v] : ("Code " + v);
+const onoff = (v) => v ? "ein" : "aus";
+function decodeSettings(rx) {
+  const d = rx.slice(2, rx.length - 2);
+  const bit = (o, s) => (d[o] >> s) & 1;
+  const bits = (o, s, n) => (d[o] >> s) & ((1 << n) - 1);
+  const bat = (o) => ({ lo: u16le(d, o) * 0.01, hi: u16le(d, o + 2) * 0.01, cap: u16le(d, o + 4) * 0.01 });
+  return {
+    immobilizer: bit(0, 7), preferredUnits: bit(0, 5), startupKeepLight: bit(0, 4),
+    resetTrip: bit(0, 2), startupRoad: bit(0, 1),
+    shutdown: bits(1, 6, 2), batteryUsed: bits(1, 4, 2), modeLabels: bits(1, 2, 2), roadRestrict: bits(1, 0, 2),
+    assistLevels: bits(2, 4, 4), secondaryUnit: bits(2, 0, 4), layout: bits(3, 0, 4),
+    wheel: u16le(d, 4), maxRoad: d[6], maxOff: d[7], proto: d[8],
+    bat: [bat(9), bat(15), bat(21)], walkDisabled: bit(27, 7),
+  };
+}
+function renderSettings(o) {
+  const row = (k, v) => `<div class="setrow"><span>${k}</span><span>${v}</span></div>`;
+  let h = "";
+  h += row("Einheiten", lut(SET_LUT.units, o.preferredUnits));
+  h += row("Zweitanzeige", lut(SET_LUT.secondary, o.secondaryUnit));
+  h += row("Assist-Stufen", lut(SET_LUT.assist, o.assistLevels));
+  h += row("Tempolimit Road", o.maxRoad + " km/h");
+  h += row("Tempolimit Offroad", o.maxOff + " km/h");
+  h += row("Radumfang", o.wheel + " mm");
+  h += row("Motor-Protokoll", lut(SET_LUT.proto, o.proto));
+  h += row("Abschaltung", lut(SET_LUT.shutdown, o.shutdown));
+  h += row("Modus-Bezeichnung", lut(SET_LUT.modeLabels, o.modeLabels));
+  h += row("Start im Road-Modus", onoff(o.startupRoad));
+  h += row("Road-Beschränkung", lut(SET_LUT.roadRestrict, o.roadRestrict));
+  h += row("Hauptbildschirm", lut(SET_LUT.layout, o.layout));
+  h += row("Licht beim Start an", onoff(o.startupKeepLight));
+  h += row("Wegfahrsperre", onoff(o.immobilizer));
+  h += row("Gehhilfe", o.walkDisabled ? "deaktiviert" : "aktiv");
+  h += `<div class="setsub">Akku-Profile (aktiv: Akku ${o.batteryUsed + 1})</div>`;
+  o.bat.forEach((b, i) => {
+    const active = i === o.batteryUsed ? " style=\"color:var(--accent2)\"" : "";
+    h += `<div class="setrow"${active}><span>Akku ${i + 1}</span><span>${b.lo.toFixed(1)}–${b.hi.toFixed(1)} V · ${b.cap.toFixed(1)} Ah</span></div>`;
+  });
+  $("setBody").innerHTML = h;
+}
+
+// Gauge-Skalen (Anzeigeobergrenze der Arcs)
+const GAUGE = { speed: 60, motor: 1600, rider: 500, powerMax: 2000, cadence: 120 };
+// Füllt eine Gauge: Anteil 0..1 als stroke-dasharray, Farbe optional.
+function setGauge(arcId, value, max, color) {
+  const f = Math.max(0, Math.min(1, (value || 0) / max));
+  const arc = $(arcId);
+  arc.setAttribute("stroke-dasharray", (f * 100).toFixed(2) + " 100");
+  if (color) arc.style.stroke = color;   // Inline-Stil: var() wird hier aufgelöst, als Attribut nicht
+}
+// Ampelfarbe nach Schwellen [grün, gelb] ab denen die nächste Stufe beginnt.
+function band(value, amber, red) {
+  return value >= red ? "var(--bad)" : value >= amber ? "var(--warn)" : "var(--accent)";
+}
+// Trittleistung aus Drehmoment (Nm) und Trittfrequenz (rpm): P = M · ω, ω = 2π·rpm/60.
+function riderPower(torqueNm, cadenceRpm) {
+  if (torqueNm == null || cadenceRpm == null) return null;
+  return torqueNm * cadenceRpm * (2 * Math.PI / 60);
+}
+
+// ---- Glättung (exponentiell gleitender Mittelwert) ----
+// alpha klein = ruhiger/träger, groß = schneller/zappeliger. Pro Messgröße abgestimmt.
+const EMA_ALPHA = { speed: 0.4, motor: 0.3, rider: 0.25, soc: 0.05, cadence: 0.3, volt: 0.3, cur: 0.3, torque: 0.3 };
+const ema = { speed: null, motor: null, rider: null, soc: null, cadence: null, volt: null, cur: null, torque: null };
+function resetSmoothing() { ema.speed = ema.motor = ema.rider = ema.soc = ema.cadence = ema.volt = ema.cur = ema.torque = null; }
+function smooth(key, val) {
+  if (val == null) return ema[key];
+  const a = EMA_ALPHA[key];
+  ema[key] = (ema[key] == null) ? val : ema[key] + a * (val - ema[key]);
+  return ema[key];
+}
+
+// ---- Akkustand aus Spannung (genauer als der rohe Display-Wert) ----
+// Zellzahl per Auswahl (10S=36V, 13S=48V, 14S=52V, 16S=60V), Innenwiderstand grob.
+const BATTERY = { cells: 13, internalOhm: 0.15 };
+// Ruhespannung je Zelle → SOC (%), typische Li-Ion-NMC-Entladekurve.
+const SOC_CURVE = [
+  [3.00, 0], [3.30, 5], [3.45, 10], [3.55, 20], [3.63, 30], [3.70, 40],
+  [3.75, 50], [3.82, 60], [3.90, 70], [3.97, 80], [4.07, 90], [4.15, 97], [4.20, 100],
+];
+// Klemmenspannung + I·R → geschätzte Ruhespannung, dann über die Kurve auf SOC.
+function socFromVoltage(packV, currentA) {
+  if (!packV) return null;
+  const restV = packV + (currentA || 0) * BATTERY.internalOhm;   // Entladung senkt die Klemmenspannung → zurückrechnen
+  const cell = restV / BATTERY.cells;
+  const c = SOC_CURVE;
+  if (cell <= c[0][0]) return 0;
+  if (cell >= c[c.length - 1][0]) return 100;
+  for (let i = 1; i < c.length; i++) {
+    if (cell <= c[i][0]) {
+      const [v0, p0] = c[i - 1], [v1, p1] = c[i];
+      return p0 + (p1 - p0) * (cell - v0) / (v1 - v0);
+    }
+  }
+  return 100;
+}
+
+// ---- Coulomb-Zählung: genauer SOC über verbrauchte Amperestunden ----
+const PACK = { capacityAh: 21 };
+let coulomb = { soc: null, consumedAh: 0, lastT: null };
+function resetCoulomb() { coulomb = { soc: null, consumedAh: 0, lastT: null }; }
+function updateSoc(voltage, current) {
+  const vSoc = socFromVoltage(voltage, current);
+  const now = (typeof performance !== "undefined" ? performance.now() : Date.now());
+  if (coulomb.soc == null) { coulomb.soc = vSoc; coulomb.lastT = now; return { soc: vSoc, vSoc, consumed: 0 }; }
+  const dtH = Math.min(5, (now - coulomb.lastT) / 1000) / 3600;   // dt in Stunden, nach Pausen auf 5 s begrenzt
+  coulomb.lastT = now;
+  const i = Math.max(0, current || 0);
+  const dAh = i * dtH;
+  coulomb.consumedAh += dAh;
+  coulomb.soc -= dAh / PACK.capacityAh * 100;
+  if (i < 1 && vSoc != null) coulomb.soc += 0.03 * (vSoc - coulomb.soc);   // Re-Anker bei Ruhe über die Spannung
+  coulomb.soc = Math.max(0, Math.min(100, coulomb.soc));
+  return { soc: coulomb.soc, vSoc, consumed: coulomb.consumedAh };
+}
+
+function render(s) {
+  // Rohwerte in die Kacheln (für Diagnose exakt), geglättete Werte in die Gauges.
+  $("volt").textContent = fmt(s.voltage, 1);
+  $("voltCell").textContent = "· " + (s.voltage / BATTERY.cells).toFixed(2) + " V/Z";
+  $("assist").textContent = displayAssist(s.assist);
+  $("mode").textContent = s.mode ? "Offroad" : "Road";
+  const modeName = s.mode ? "offroad" : "road";   // Offroad → rötliches Theme wie am Display
+  if (modeName !== curMode) { curMode = modeName; document.documentElement.setAttribute("data-mode", modeName); updateMeta(); }
+
+  const motorW = s.voltage * s.current;
+  const riderW = riderPower(s.humanTorque, s.cadence);
+  const speedS = smooth("speed", s.speed);
+  const motorS = smooth("motor", motorW);
+  const riderS = smooth("rider", riderW === null ? 0 : riderW);
+  const cadS = smooth("cadence", s.cadence);
+  $("speed").textContent = fmt(speedS, 0);
+  setGauge("gSpeed", speedS, GAUGE.speed, band(speedS, 35, 50));
+  // Innerer Arc: Trittfrequenz
+  setGauge("gCad", cadS, GAUGE.cadence);
+  $("cadGauge").textContent = (cadS === null || cadS === undefined) ? "–" : Math.round(cadS);
+  // Leistungs-Balken: Segmentbreiten = Anteil an der Gesamtleistung (Summe = 100 %).
+  const total = (motorS || 0) + (riderS || 0);
+  const mPct = total > 0 ? (motorS / total) * 100 : 0;
+  const rPct = total > 0 ? (riderS / total) * 100 : 0;
+  $("pbMotor").style.width = mPct.toFixed(1) + "%";
+  $("pbRider").style.width = rPct.toFixed(1) + "%";
+  $("watt").textContent = fmt(motorS, 0);
+  $("riderW").textContent = riderW === null ? "–" : fmt(riderS, 0);
+  $("wattTot").textContent = fmt(total, 0) + " W";
+
+  // Akku: Display-Wert als Balken, zusätzlich Spannungs-Schätzung (geglättet).
+  const b = Math.max(0, Math.min(100, s.battery));
+  $("battBar").style.width = b + "%";
+  $("battBar").style.backgroundSize = (b > 0 ? (10000 / b).toFixed(1) : 100) + "% 100%";   // Verlauf über die volle Balkenbreite (0 = rot, 100 = grün)
+  $("battTxt").textContent = s.battery + " %";
+  const soc = updateSoc(s.voltage, s.current);
+  if (soc.soc != null) {
+    $("battEst").textContent = "≈ " + soc.soc.toFixed(0) + " %";
+    $("battDetail").textContent = "Verbrauch " + soc.consumed.toFixed(1).replace(".", ",") + " Ah";   // seit dem Verbinden entnommen
+  }
+  if (trip) sampleTrip(s, {        // geglättete Analogwerte für die 1-Hz-Aufzeichnung
+    speed: speedS,
+    voltage: smooth("volt", s.voltage),
+    current: smooth("cur", s.current),
+    cadence: cadS == null ? 0 : cadS,
+    torque: smooth("torque", s.humanTorque),
+  });
+  // Licht steuert das Theme: an → dunkel, aus → hell. Nur bei Änderung, damit manuelles Umschalten bis dahin bleibt.
+  if (s.light !== lastLightState) {
+    lastLightState = s.light;
+    theme = s.light ? "dark" : "light";
+    applyTheme(theme);
+  }
+  lastLight = s.light;
+  $("cLight").className = "chip" + (s.light ? " on" : "");
+  $("cLock").className = "chip" + (s.lock ? " on" : "");
+  const fault = !ERR_BENIGN.has(s.error);
+  $("cErr").textContent = fault ? "Störung: " + errorName(s.error) : "Status: " + errorName(s.error);
+  $("cErr").className = "chip" + (fault ? " bad" : "");
+}
+
+// ---- Main flow ----
+// Bricht einen hängenden Schritt nach ms ab, damit nichts endlos wartet.
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new DOMException(label + " nach " + ms + " ms ohne Antwort", "TimeoutError")), ms)),
+  ]);
+}
+async function gattConnect(dev) {
+  try {
+    return await withTimeout(dev.gatt.connect(), 10000, "GATT-Verbindung");
+  } catch (e) {
+    log("Erster Verbindungsversuch: " + e.name + " – " + e.message + ". Zweiter Versuch …");
+    try { dev.gatt.disconnect(); } catch (x) {}
+    await new Promise((r) => setTimeout(r, 1200));
+    return await withTimeout(dev.gatt.connect(), 10000, "GATT-Verbindung (2. Versuch)");
+  }
+}
+async function connect() {
+  $("btnConnect").disabled = true;
+  try {
+    setStatus("busy", "Gerät wählen …", "Im Dialog das Display antippen.");
+    log("Öffne Geräteauswahl …");
+    device = await withTimeout(navigator.bluetooth.requestDevice({
+      filters: [{ services: [SVC] }, { namePrefix: "EggRider" }],
+      optionalServices: [SVC],
+    }), 30000, "Geräteauswahl");
+    log("Gewähltes Gerät: \"" + (device.name || "(ohne Namen)") + "\"  id=" + (device.id || "?"));
+    device.addEventListener("gattserverdisconnected", onDisconnected);
+    setStatus("busy", "Verbinde …", device.name || "");
+    log("Verbinde mit GATT-Server …");
+    const server = await gattConnect(device);
+    log("GATT verbunden. Suche Dienst …");
+    const svc = await withTimeout(server.getPrimaryService(SVC), 8000, "Dienstsuche");
+    log("Dienst gefunden. Suche Merkmale …");
+    chWrite = await withTimeout(svc.getCharacteristic(CH_WRITE), 8000, "Write-Merkmal");
+    chNotify = await withTimeout(svc.getCharacteristic(CH_NOTIFY), 8000, "Notify-Merkmal");
+    log("Write-Eigenschaften: " + JSON.stringify({ write: chWrite.properties.write, writeWithoutResponse: chWrite.properties.writeWithoutResponse }));
+    chNotify.addEventListener("characteristicvaluechanged", onNotify);
+    await withTimeout(chNotify.startNotifications(), 8000, "Benachrichtigungen aktivieren");
+    log("Verbunden, Benachrichtigungen aktiv.");
+    setStatus("on", "Verbunden", device.name || "");
+    $("btnConnect").textContent = "Trennen";
+    $("btnTrip").disabled = false; $("tripStat").textContent = "bereit";
+    try { if ("wakeLock" in navigator) wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
+    resetSmoothing();
+    resetCoulomb();
+    running = true;
+    loop();
+  } catch (e) {
+    const name = e && e.name, msg = (e && e.message) || "";
+    if (name === "NotFoundError" && /chooser|cancel|User cancelled/i.test(msg)) {
+      setStatus("", "Nicht verbunden", "Kein Gerät gewählt.");
+    } else {
+      log("FEHLER beim Verbinden: " + name + " – " + msg);
+      let hint = "";
+      if (name === "TimeoutError" || name === "NetworkError") hint = "Display evtl. noch mit der Original-App verbunden. Diese ganz schließen, Bluetooth aus/ein, Display aus/ein.";
+      if (name === "NotFoundError") hint = "Kein passendes Gerät gefunden. Display eingeschaltet und in Reichweite?";
+      if (hint) log("Hinweis: " + hint);
+      setStatus("err", "Verbindung fehlgeschlagen", hint || msg);
+    }
+    try { if (device && device.gatt && device.gatt.connected) device.gatt.disconnect(); } catch (x) {}
+  } finally { $("btnConnect").disabled = false; }
+}
+function onDisconnected() {
+  running = false;
+  if (trip) stopTrip();          // laufende Fahrt sichern
+  $("btnTrip").disabled = true; $("tripStat").textContent = "erst verbinden"; setTripOpen(false);
+  log("Verbindung getrennt.");
+  setStatus("err", "Getrennt", "Zum erneuten Verbinden tippen.");
+  $("btnConnect").textContent = "Verbinden";
+  pendingCommands.length = 0;
+  lastLightState = null;   // beim nächsten Verbinden Theme neu nach Lichtzustand setzen
+  curMode = "road"; document.documentElement.setAttribute("data-mode", "road"); updateMeta();
+  if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+}
+async function loop() {
+  try {
+    // 1) App beim Display anmelden. Ohne diesen Schritt zeigt das Display "no id".
+    let registered = false;
+    for (const mode of APP_MODE_CANDIDATES) {
+      const ack = await request(buildAppIdentity(mode));
+      if (ack) { log("Anmeldung akzeptiert (Modus " + mode + ")."); registered = true; break; }
+      log("Anmeldung mit Modus " + mode + " ohne Antwort – nächster Versuch.");
+    }
+    if (!registered) log("Keine Anmeldung bestätigt – lese trotzdem weiter, das Display zeigt evtl. weiter \"no id\".");
+
+    // 2) Identität des Displays lesen.
+    const id = await request(REQ.identity);
+    if (id) {
+      const i = decodeIdentity(id);
+      log("Identität: MAC " + i.mac + ", Firmware " + i.fw + ", Release " + i.release);
+    }
+
+    // 3) Display-Einstellungen einmalig lesen (22 29).
+    const st = await request(REQ.settings);
+    if (st) {
+      try { const cfg = decodeSettings(st); assistType = cfg.assistLevels; renderSettings(cfg); log("Display-Einstellungen gelesen (Assist-Typ " + (assistType || 9) + " Stufen)."); }
+      catch (e) { log("Einstellungen: Dekodierfehler – " + e.message); }
+    } else {
+      $("setBody").innerHTML = "<div class=\"setrow\"><span>Einstellungen nicht gelesen (keine gültige Antwort).</span><span></span></div>";
+      log("Einstellungen (22 29): keine gültige Antwort.");
+    }
+    let live = REQ.liveV04, misses = 0, good = 0;
+    while (running && device && device.gatt.connected) {
+      // Eingereihte Schreibkommandos zuerst senden (immer protokollieren).
+      while (pendingCommands.length && running) {
+        const c = pendingCommands.shift();
+        const ack = await request(c, false);
+        log(ack ? (c.name + ": bestätigt") : (c.name + ": keine Bestätigung (Display reagiert evtl. trotzdem)"));
+      }
+      const rx = await request(live, good > 2 && !recording);   // Anfang + bei aktiver Aufzeichnung + Fehler loggen
+      if (rx) {
+        misses = 0; good++;
+        if (good === 1) log("Live-Format: " + (live === REQ.liveV04 ? "V04" : "V01"));
+        render(live === REQ.liveV04 ? decodeV04(rx) : decodeV01(rx));
+      } else if (++misses >= 3 && good === 0) {
+        live = (live === REQ.liveV04) ? REQ.liveV01 : REQ.liveV04;
+        log("Keine gültige Antwort – wechsle auf " + live.name);
+        misses = 0;
+      }
+      await new Promise((r) => setTimeout(r, POLL_MS));
+    }
+  } catch (e) {
+    log("FEHLER in der Abfrage: " + (e && e.name) + " – " + (e && e.message));
+  }
+}
+
+// ================= Android-App =================
+// In der App (WebView) laufen Bluetooth, GPS und Fahrt-Aufzeichnung nativ im Hintergrunddienst,
+// damit sie auch bei ausgeschaltetem Bildschirm weiterlaufen. Die App ruft dazu window.Native.* auf;
+// Befehle gehen über window.EggBridge an die App. Im Browser ist NATIVE false und alles bleibt wie bisher.
+const NATIVE = typeof window.EggBridge !== "undefined";
+let nativeRec = false;
+window.Native = {
+  status(kind, text, sub, serviceRunning) {
+    const on = kind === "on";
+    if (on && !running) { resetSmoothing(); resetCoulomb(); }
+    running = on;
+    setStatus(kind, text, sub);
+    $("btnConnect").textContent = serviceRunning ? "Trennen" : "Verbinden";
+    $("btnTrip").disabled = !(on || nativeRec);
+    if (!nativeRec) $("tripStat").textContent = on ? "bereit" : "erst verbinden";
+    if (!serviceRunning) {
+      setTripOpen(false);
+      lastLightState = null;
+      curMode = "road"; document.documentElement.setAttribute("data-mode", "road"); updateMeta();
+    }
+  },
+  live(bytes) {
+    const rx = Uint8Array.from(bytes);
+    try { render(rx.length === REQ.liveV04.len ? decodeV04(rx) : decodeV01(rx)); }
+    catch (e) { log("Anzeige-Fehler: " + e.message); }
+  },
+  settings(bytes) {
+    try { const cfg = decodeSettings(Uint8Array.from(bytes)); assistType = cfg.assistLevels; renderSettings(cfg); }
+    catch (e) { log("Einstellungen: Dekodierfehler – " + e.message); }
+  },
+  log(line) {   // Zeile kommt mit Zeitstempel aus der App
+    logLines.push(line);
+    if (logLines.length > 400) logLines.shift();
+    const el = $("log"); el.textContent = logLines.join("\n"); el.scrollTop = el.scrollHeight;
+  },
+  trip(rec, startTs, dist) {
+    nativeRec = rec;
+    $("btnTrip").textContent = rec ? "■ Fahrt stoppen" : "● Fahrt aufzeichnen";
+    $("btnTrip").classList.toggle("rec", rec);
+    $("tripIcon").classList.toggle("rec", rec);
+    if (rec) {
+      const tm = fmtDur(Math.max(0, Math.round((Date.now() - startTs) / 1000)));
+      $("tripMini").textContent = tm;
+      $("tripStat").textContent = tm + " · " + dist.toFixed(1).replace(".", ",") + " km";
+    } else {
+      $("tripMini").textContent = "Fahrt";
+      $("tripStat").textContent = running ? "bereit" : "erst verbinden";
+    }
+    $("btnTrip").disabled = !(running || rec);
+  },
+  tripsChanged() { renderTrips(); },
+};
+
+// Akkutyp merken (nur lokal im Browser, rein zur Bequemlichkeit).
+try { const saved = localStorage.getItem("battCells"); if (saved) { BATTERY.cells = +saved; $("battType").value = saved; } } catch (e) {}
+$("battType").addEventListener("change", (e) => {
+  BATTERY.cells = +e.target.value;
+  resetCoulomb();   // SOC mit neuer Zellzahl neu aus der Spannung ankern
+  try { localStorage.setItem("battCells", e.target.value); } catch (x) {}
+});
+// ================= Fahrten (Trips): Aufzeichnung, Speicherung (IndexedDB), Export =================
+let trip = null;            // aktuell laufende Aufzeichnung
+let tripTimer = null;
+let wrongCRCs = 0;          // kumulativer CRC-Fehlerzähler (für CSV)
+let geoWatch = null, lastPos = null;   // GPS
+function startGeo() {
+  if (!navigator.geolocation) { log("GPS nicht verfügbar."); return; }
+  try {
+    geoWatch = navigator.geolocation.watchPosition(
+      (p) => { lastPos = { lat: p.coords.latitude, lon: p.coords.longitude, alt: p.coords.altitude, acc: p.coords.accuracy, spd: p.coords.speed }; },
+      (err) => { log("GPS: " + err.message); },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
+    );
+  } catch (e) { log("GPS-Fehler: " + e.message); }
+}
+function stopGeo() { if (geoWatch != null && navigator.geolocation) { try { navigator.geolocation.clearWatch(geoWatch); } catch (e) {} geoWatch = null; } lastPos = null; }
+function openDB() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open("eggrider", 1);
+    r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("trips")) r.result.createObjectStore("trips", { keyPath: "id" }); };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function dbPut(t) { const d = await openDB(); return new Promise((res, rej) => { const tx = d.transaction("trips", "readwrite"); tx.objectStore("trips").put(t); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
+async function dbAll() { const d = await openDB(); return new Promise((res, rej) => { const tx = d.transaction("trips", "readonly"); const q = tx.objectStore("trips").getAll(); q.onsuccess = () => res(q.result || []); q.onerror = () => rej(q.error); }); }
+async function dbDel(id) { const d = await openDB(); return new Promise((res, rej) => { const tx = d.transaction("trips", "readwrite"); tx.objectStore("trips").delete(id); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
+
+function fmtDur(sec) { const m = Math.floor(sec / 60), s = sec % 60; const h = Math.floor(m / 60); return (h ? h + ":" + String(m % 60).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0"); }
+function store(t) { return { id: t.id, startTs: t.startTs, endTs: t.endTs || Date.now(), dist: t.dist, wh: t.wh, samples: t.samples, summary: t.summary }; }
+
+function startTrip() {
+  wrongCRCs = 0;
+  trip = { id: Date.now(), startTs: Date.now(), samples: [], dist: 0, wh: 0, lastT: null, maxSpeed: 0 };
+  $("btnTrip").textContent = "■ Fahrt stoppen"; $("btnTrip").classList.add("rec");
+  $("tripIcon").classList.add("rec");
+  tripTimer = setInterval(updateTripStat, 1000); updateTripStat();
+  startGeo();
+  log("Fahrt-Aufzeichnung gestartet.");
+}
+async function stopTrip() {
+  if (!trip) return;
+  clearInterval(tripTimer); tripTimer = null;
+  stopGeo();
+  const t = trip; trip = null;
+  $("btnTrip").textContent = "● Fahrt aufzeichnen"; $("btnTrip").classList.remove("rec");
+  $("tripIcon").classList.remove("rec"); $("tripMini").textContent = "Fahrt"; $("tripStat").textContent = "bereit";
+  if (t.samples.length >= 2) {
+    t.endTs = Date.now(); t.summary = tripSummary(t);
+    try { await dbPut(store(t)); log("Fahrt gespeichert (" + t.samples.length + " Punkte, " + t.dist.toFixed(1) + " km)."); }
+    catch (e) { log("Fahrt speichern fehlgeschlagen: " + e.message); }
+    renderTrips();
+  } else { log("Fahrt verworfen (zu wenig Daten)."); }
+}
+function sampleTrip(s, sm) {
+  const now = Date.now();
+  if (trip.lastT != null) {
+    const dtH = (now - trip.lastT) / 3600000;
+    trip.dist += (sm.speed || 0) * dtH;
+    trip.wh += (sm.voltage * sm.current) * dtH;
+  }
+  trip.lastT = now;
+  if (sm.speed > trip.maxSpeed) trip.maxSpeed = sm.speed;
+  const last = trip.samples[trip.samples.length - 1];
+  if (!last || now - last.ts >= 1000) {   // genau ~1 geglättete Zeile pro Sekunde
+    trip.samples.push({
+      ts: now, spd: sm.speed, v: sm.voltage, i: sm.current, dist: trip.dist,
+      alt: lastPos && lastPos.alt != null ? lastPos.alt : 0,
+      gps: lastPos && lastPos.spd != null ? lastPos.spd : 0,   // m/s, im CSV ×3.6
+      lat: lastPos ? lastPos.lat : null, lon: lastPos ? lastPos.lon : null,
+      acc: lastPos && lastPos.acc != null ? lastPos.acc : null,
+      batt: s.battery, crc: wrongCRCs, as: s.assist, md: s.mode, err: s.error,
+      dt: s.tDisplayRaw, mt: s.tMotorRaw, bt: s.tBatteryRaw, ct: s.tControllerRaw,
+      cad: sm.cadence, tq: sm.torque, hr: s.heartRateRaw,
+    });
+    if (trip.samples.length % 20 === 0) dbPut(store(trip)).catch(() => {});   // regelmäßig zwischensichern
+  }
+}
+function updateTripStat() {
+  if (!trip) return;
+  const tm = fmtDur(Math.round((Date.now() - trip.startTs) / 1000));
+  $("tripMini").textContent = tm;
+  $("tripStat").textContent = tm + " · " + trip.dist.toFixed(1).replace(".", ",") + " km";
+}
+function tripSummary(t) {
+  const durS = Math.round((t.endTs - t.startTs) / 1000);
+  const avg = durS > 0 ? t.dist / (durS / 3600) : 0;
+  return { durS, dist: t.dist, wh: t.wh, avgSpeed: avg, maxSpeed: t.maxSpeed };
+}
+// CSV im exakten Format der Original-App (Version 6, en-US-Zahlen mit Punkt).
+function tripCSV(t) {
+  const head = "Time(HH:mm:ss.fff);Speed(km/h);Voltage(V);Current(A);Distance(km);Altitude(m);Date;SpeedGPS(km/h);Latitude;Longitude;AccuracyPosition(m);BatteryPercentage;WrongCRCs;AssistLevel;OffRoadMode;ErrorCode;DisplayTemp(C);MotorTemp(C);BatteryTemp(C);ControllerTemp(C);MotorPower(W);PedalCadence(rpm);HumanTorque(Nm);HeartRate(bpm)";
+  const p2 = (n, l) => String(n).padStart(l, "0");
+  const rows = t.samples.map(x => {
+    const d = new Date(x.ts != null ? x.ts : t.startTs + (x.t || 0) * 1000);
+    const time = p2(d.getHours(), 2) + ":" + p2(d.getMinutes(), 2) + ":" + p2(d.getSeconds(), 2) + "." + p2(d.getMilliseconds(), 3);
+    const date = d.getFullYear() + "-" + p2(d.getMonth() + 1, 2) + "-" + p2(d.getDate(), 2);
+    return [
+      time, (+x.spd).toFixed(2), (+x.v).toFixed(2), (+x.i).toFixed(2), (+x.dist).toFixed(2), (+(x.alt || 0)).toFixed(2),
+      date, (+(x.gps || 0) * 3.6).toFixed(2), x.lat == null ? "" : x.lat, x.lon == null ? "" : x.lon, x.acc == null ? "" : (+x.acc).toFixed(2),
+      x.batt, x.crc == null ? 0 : x.crc, x.as, x.md, x.err, x.dt, x.mt, x.bt, x.ct,
+      Math.round(x.v * x.i), Math.round(x.cad), Math.round(x.tq), x.hr,
+    ].join(";");
+  });
+  return head + "\n" + rows.join("\n") + "\n";
+}
+const tripSel = new Set();      // ausgewählte Fahrten (ids)
+let tripCache = [];
+function tripFile(t) {
+  const d = new Date(t.startTs), p2 = (n) => String(n).padStart(2, "0");
+  const name = "eggrider_" + d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) + "_" + p2(d.getHours()) + "-" + p2(d.getMinutes()) + "-" + p2(d.getSeconds()) + ".csv";
+  return new File([tripCSV(t)], name, { type: "text/csv" });
+}
+async function shareTrips(list) {
+  if (!list.length) return;
+  if (NATIVE) { EggBridge.shareTrips(JSON.stringify(list.map((t) => t.id))); return; }
+  const files = list.map(tripFile);
+  try {
+    if (navigator.canShare && navigator.canShare({ files })) {
+      await navigator.share({ files, title: files.length === 1 ? "EggRider Fahrt" : files.length + " EggRider Fahrten" });
+      return;
+    }
+  } catch (e) { if (e && e.name === "AbortError") return; log("Teilen nicht möglich (" + e.name + ") – lade stattdessen herunter."); }
+  for (const f of files) {       // Fallback: Download je Datei
+    const url = URL.createObjectURL(f);
+    const a = document.createElement("a"); a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
+function updateTripActions() {
+  const n = tripSel.size;
+  $("btnTripShare").disabled = n === 0; $("btnTripDel").disabled = n === 0;
+  $("btnTripShare").textContent = n > 1 ? "Senden (" + n + ")" : "Senden als …";
+  $("btnTripDel").textContent = n > 1 ? "Löschen (" + n + ")" : "Löschen";
+  $("tripAll").checked = tripCache.length > 0 && n === tripCache.length;
+  $("tripAll").disabled = tripCache.length === 0;
+}
+async function renderTrips() {
+  let trips = [];
+  try { trips = NATIVE ? JSON.parse(EggBridge.listTrips()) : await dbAll(); } catch (e) { $("tripsBody").innerHTML = "<div class=\"setrow\"><span>Speicher nicht verfügbar</span><span></span></div>"; return; }
+  trips.sort((a, b) => b.startTs - a.startTs);
+  tripCache = trips;
+  for (const id of [...tripSel]) if (!trips.some((t) => t.id === id)) tripSel.delete(id);
+  const box = $("tripsBody"); box.innerHTML = "";
+  if (!trips.length) box.innerHTML = "<div class=\"setrow\"><span>noch keine Fahrten</span><span></span></div>";
+  for (const t of trips) {
+    const sm = t.summary || tripSummary(t);
+    const d = new Date(t.startTs);
+    const el = document.createElement("label"); el.className = "trip";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = tripSel.has(t.id);
+    cb.addEventListener("change", () => { if (cb.checked) tripSel.add(t.id); else tripSel.delete(t.id); updateTripActions(); });
+    const info = document.createElement("div");
+    info.innerHTML = "<div class=\"th\"><span>" + d.toLocaleDateString("de-AT") + " " + d.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" }) + "</span><span>" + sm.dist.toFixed(1).replace(".", ",") + " km</span></div>"
+      + "<div class=\"ts\">" + fmtDur(sm.durS) + " · ø " + sm.avgSpeed.toFixed(0) + " km/h · max " + sm.maxSpeed.toFixed(0) + " km/h · " + Math.round(sm.wh) + " Wh</div>";
+    el.appendChild(cb); el.appendChild(info); box.appendChild(el);
+  }
+  updateTripActions();
+}
+$("tripAll").addEventListener("change", () => {
+  tripSel.clear();
+  if ($("tripAll").checked) tripCache.forEach((t) => tripSel.add(t.id));
+  renderTrips();
+});
+$("btnTripShare").addEventListener("click", () => shareTrips(tripCache.filter((t) => tripSel.has(t.id))));
+$("btnTripDel").addEventListener("click", async () => {
+  const n = tripSel.size; if (!n) return;
+  if (!confirm(n === 1 ? "Ausgewählte Fahrt löschen?" : n + " ausgewählte Fahrten löschen?")) return;
+  if (NATIVE) EggBridge.deleteTrips(JSON.stringify([...tripSel]));
+  else for (const id of [...tripSel]) { try { await dbDel(id); } catch (e) {} }
+  tripSel.clear(); renderTrips();
+});
+$("tgConn").addEventListener("click", () => setConnOpen($("connPanel").hidden));
+$("tgTrip").addEventListener("click", () => setTripOpen($("tripbar").hidden));
+
+// Hell/Dunkel-Umschalter (für bessere Lesbarkeit bei Sonne). Wahl wird lokal gemerkt.
+function updateMeta() {
+  const light = document.documentElement.getAttribute("data-theme") === "light";
+  const off = document.documentElement.getAttribute("data-mode") === "offroad";
+  const bg = off ? (light ? "#f8eced" : "#160e10") : (light ? "#eef1f5" : "#0e1116");
+  const m = document.querySelector('meta[name="theme-color"]');
+  if (m) m.setAttribute("content", bg);
+  if (typeof window.EggBridge !== "undefined") EggBridge.setBarColor(bg, light);
+}
+function applyTheme(t) {
+  document.documentElement.setAttribute("data-theme", t);
+  $("btnTheme").textContent = (t === "light") ? "🌙" : "☀️";
+  updateMeta();
+}
+let theme = "dark";
+try {
+  theme = localStorage.getItem("theme") || (matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+} catch (e) {}
+applyTheme(theme);
+$("btnTheme").addEventListener("click", () => {
+  theme = (theme === "light") ? "dark" : "light";
+  applyTheme(theme);
+  try { localStorage.setItem("theme", theme); } catch (e) {}
+});
+$("btnTrip").addEventListener("click", () => {
+  if (NATIVE) { if (nativeRec) EggBridge.tripStop(); else EggBridge.tripStart(); return; }
+  if (trip) stopTrip(); else startTrip();
+});
+renderTrips();
+// Bildschirm-Sperre nach App-Wechsel wieder anfordern (hält bei sichtbarem Display die Verbindung).
+document.addEventListener("visibilitychange", async () => {
+  if (document.visibilityState === "visible" && running && "wakeLock" in navigator) {
+    try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
+  }
+});
+
+let recording = false;
+$("btnConnect").addEventListener("click", () => {
+  if (NATIVE) { if ($("btnConnect").textContent === "Trennen") EggBridge.disconnect(); else EggBridge.connect(); return; }
+  if (device && device.gatt.connected) { running = false; device.gatt.disconnect(); }
+  else connect();
+});
+$("btnRec").addEventListener("click", () => {
+  recording = !recording;
+  if (NATIVE) EggBridge.setVerbose(recording);
+  $("btnRec").textContent = recording ? "Aufzeichnung stoppen" : "Aufzeichnen";
+  $("btnRec").className = recording ? "" : "ghost";
+  log(recording ? "— Aufzeichnung gestartet —" : "— Aufzeichnung gestoppt —");
+});
+$("btnClear").addEventListener("click", () => { logLines.length = 0; $("log").textContent = ""; });
+$("btnCopy").addEventListener("click", async () => {
+  const text = logLines.join("\n");
+  try { if (NATIVE) EggBridge.copy(text); else await navigator.clipboard.writeText(text); $("btnCopy").textContent = "Kopiert"; }
+  catch (e) {
+    const r = document.createRange(); r.selectNodeContents($("log"));
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    $("btnCopy").textContent = "Markiert – bitte kopieren";
+  }
+  setTimeout(() => { $("btnCopy").textContent = "Kopieren"; }, 2000);
+});
+
+const UA = navigator.userAgent;
+const isSamsung = /SamsungBrowser/i.test(UA);
+const isChrome = /Chrome/i.test(UA) && !isSamsung && !/Edg|OPR|YaBrowser/i.test(UA);
+if (NATIVE) {
+  $("bgNote").textContent = "Diese App liest nur Werte aus dem Display. Sie ändert keine Einstellungen an Display oder Motor. Verbindung und Fahrt-Aufzeichnung laufen auch bei ausgeschaltetem Bildschirm weiter (Benachrichtigung bleibt sichtbar).";
+  $("footVer").textContent = "Bike-Display · v0.30 · Android";
+} else if (!("bluetooth" in navigator)) {
+  $("btnConnect").disabled = true;
+  showAlert("Dieser Browser kann von Webseiten aus kein Bluetooth nutzen. Bitte die Seite in <b>Google Chrome</b> öffnen (nicht im Samsung-Browser oder im Browser einer anderen App) und über eine https-Adresse aufrufen.");
+} else if (isSamsung) {
+  showAlert("Du bist im <b>Samsung Internet Browser</b>. Der öffnet kein Bluetooth-Auswahlfenster und bleibt beim Verbinden hängen. Bitte dieselbe Adresse in <b>Google Chrome</b> öffnen: Adresse kopieren, die Chrome-App starten, einfügen.");
+  log("WARNUNG: Samsung Internet erkannt – Web-Bluetooth funktioniert hier nicht. Bitte Chrome verwenden.");
+} else if (!isChrome) {
+  showAlert("Für die Bluetooth-Verbindung bitte <b>Google Chrome</b> auf Android verwenden. In anderen Browsern erscheint evtl. kein Auswahlfenster.");
+}
+log("Seite geladen. " + UA);
+if (NATIVE) EggBridge.ready();
+</script>
+</body>
+</html>
