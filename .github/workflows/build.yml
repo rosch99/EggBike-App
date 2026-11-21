@@ -65,13 +65,12 @@ jobs:
 
       - name: Signatur prüfen
         working-directory: ${{ steps.find.outputs.dir }}
+        env:
+          EGG_KEYSTORE_PASSWORD: ${{ secrets.EGG_KEYSTORE_PASSWORD }}
+        # Zeigt Konfiguration und SHA-256 des Schlüssels, mit dem die Debug-APK signiert wird.
+        # Nur Anzeige, bricht den Build nicht ab.
         run: |
-          # Zeigt den Fingerabdruck des Signaturzertifikats. Nur Anzeige, bricht den Build nicht ab.
-          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -n1)
-          echo "apksigner: ${APKSIGNER:-nicht gefunden}"
-          if [ -n "$APKSIGNER" ]; then
-            "$APKSIGNER" verify --print-certs app/build/outputs/apk/debug/app-debug.apk 2>&1 || echo "::warning::apksigner verify fehlgeschlagen"
-          fi
+          ./gradlew signingReport --no-daemon -q 2>&1 | grep -A7 -E "^Variant: debug$" || echo "::warning::Signatur konnte nicht angezeigt werden"
 
       - name: APK als Artefakt hochladen
         uses: actions/upload-artifact@v4
